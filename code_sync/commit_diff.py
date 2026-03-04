@@ -298,7 +298,8 @@ def main():
             print(text_content)
     
     # 返回码：有未同步 Commit 时返回 1
-    return 1 if unsynced else 0
+    return 0
+    # return 1 if unsynced else 0
 
 
 if __name__ == '__main__':

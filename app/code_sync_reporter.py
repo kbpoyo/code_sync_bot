@@ -131,7 +131,7 @@ class CodeSyncReporter:
                           f"Master commit数量: {stats.get('master_count', 0)}\n"
                           f"目标分支 commit数量: {stats.get('target_count', 0)}\n"
                           f"未同步 commit数量: {stats.get('unsynced_count', 0)}\n"
-                          f"白名单过滤: {stats.get('whitelisted_count', 0)}"
+                          f"白名单过滤: {stats.get('whitelisted_count', 0)}\n"
             })
             
             # 如果有未同步项
@@ -148,23 +148,24 @@ class CodeSyncReporter:
                 details = []
                 for author, commits in authors.items():
                     author_text = f"👤 {author} ({len(commits)}个):\n"
-                    for commit in commits[:3]:  # 每个作者最多显示3个
+                    for commit in commits[:]:  # 每个作者最多显示3个
                         author_text += f"  • {commit.get('title')}\n"
-                    if len(commits) > 3:
-                        author_text += f"  ... 还有{len(commits)-3}个\n"
+                        author_text += f"    日期: {commit.get('date')} ｜ Hash: {commit.get('hash')}\n"
+                    # if len(commits) > 3:
+                    #     author_text += f"  ... 还有{len(commits)-3}个\n"
                     details.append(author_text)
                 
                 if details:
                     messages.append({
                         "type": MessageType.TEXT,
-                        "content": "📝 未同步 Commit (按作者分组):\n" + "\n".join(details[:5])  # 最多5个作者
+                        "content": "📝 未同步 Commit (按作者分组):\n" + "\n".join(details[:])  # 最多5个作者
                     })
                     
-                    if len(authors) > 5:
-                        messages.append({
-                            "type": MessageType.TEXT,
-                            "content": f"📋 还有 {len(authors)-5} 个作者的未同步commit..."
-                        })
+                    # if len(authors) > 5:
+                    #     messages.append({
+                    #         "type": MessageType.TEXT,
+                    #         "content": f"📋 还有 {len(authors)-5} 个作者的未同步commit..."
+                    #     })
             
             # 发送复合消息
             send_result = webhook_sender.send_multi_part_message(group_id, messages)
