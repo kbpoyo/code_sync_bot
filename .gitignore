@@ -20,6 +20,14 @@
 !/requirements.txt
 !/run.py
 
+# 包含code_sync
+!/code_sync/
+*/code_sync/XMLIR/
+!/code_sync/*.sh
+!/code_sync/*.py
+!/code_sync/*.md
+!/code_sync/*.yaml
+
 # 临时文件
 *.py[cod]
 *$py.class

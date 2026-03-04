@@ -1,13 +1,15 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, PlainTextResponse
 import json
 import logging
+import asyncio
 from typing import Dict, Any
 
 from app.config import WeChatConfig
 from app.security import SecurityManager
 from app.handlers import MessageHandler
 from app.webhook import webhook_sender
+from app.code_sync_reporter import CodeSyncReporter
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -193,9 +195,92 @@ async def get_status():
             "message_receive": "/callback (POST)",
             "health_check": "/health",
             "send_test": "/api/send_test_message (POST)",
+            "code_sync": "/api/code_sync (GET/POST) - 执行代码同步检查",
             "status": "/api/status (GET)"
         }
     }
+
+
+# 代码同步检查端点
+@app.get("/api/code_sync")
+async def trigger_code_sync(background_tasks: BackgroundTasks):
+    """
+    触发代码同步检查（GET方式）
+    该操作会在后台执行，执行完成后会发送结果到机器人
+    """
+    group_id = "12566106"  # 默认群组ID
+    
+    async def run_sync_task():
+        try:
+            logger.info(f"开始执行代码同步检查，目标群组: {group_id}")
+            reporter = CodeSyncReporter()
+            result = await asyncio.to_thread(reporter.run_code_sync, group_id)
+            logger.info(f"代码同步检查完成，结果: {result.get('success', False)}")
+        except Exception as e:
+            logger.error(f"代码同步检查任务异常: {e}", exc_info=True)
+    
+    # 在后台执行同步任务
+    background_tasks.add_task(run_sync_task)
+    
+    return JSONResponse(content={
+        "status": "started",
+        "message": "代码同步检查已在后台启动，执行完成后会发送报告到机器人",
+        "target_group": group_id,
+        "estimated_time": "5-10分钟（取决于代码库大小）"
+    })
+
+
+@app.post("/api/code_sync")
+async def trigger_code_sync_with_params(request: Request, background_tasks: BackgroundTasks):
+    """
+    触发代码同步检查（POST方式）
+    可以通过JSON请求体指定参数
+    """
+    try:
+        data = await request.json()
+        group_id = data.get("group_id", "12566106")
+        wait_for_completion = data.get("wait_for_completion", False)
+        
+        def sync_task():
+            try:
+                logger.info(f"开始执行代码同步检查，目标群组: {group_id}")
+                reporter = CodeSyncReporter()
+                return reporter.run_code_sync(group_id)
+            except Exception as e:
+                logger.error(f"代码同步检查任务异常: {e}", exc_info=True)
+                return {"success": False, "error": str(e)}
+        
+        if wait_for_completion:
+            # 同步执行，等待结果
+            result = await asyncio.to_thread(sync_task)
+            return JSONResponse(content={
+                "status": "completed",
+                "result": result,
+                "target_group": group_id
+            })
+        else:
+            # 后台执行
+            def run_and_log():
+                result = sync_task()
+                logger.info(f"代码同步检查完成，结果: {result.get('success', False)}")
+            
+            background_tasks.add_task(run_and_log)
+            
+            return JSONResponse(content={
+                "status": "started",
+                "message": "代码同步检查已在后台启动，执行完成后会发送报告到机器人",
+                "target_group": group_id,
+                "estimated_time": "5-10分钟（取决于代码库大小）",
+                "note": "使用 wait_for_completion=true 可以等待结果返回"
+            })
+            
+    except json.JSONDecodeError:
+        # 如果没有JSON数据，使用默认值
+        return await trigger_code_sync(background_tasks)
+    except Exception as e:
+        logger.error(f"处理代码同步请求失败: {e}")
+        raise HTTPException(status_code=500, detail=f"触发失败: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn
