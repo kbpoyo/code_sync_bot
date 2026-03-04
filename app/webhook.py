@@ -121,6 +121,8 @@ class WebhookSender:
                 "body": message_body
             }
         }
+
+        print(f"message body: {message_body}")
         
         try:
             response = requests.post(
