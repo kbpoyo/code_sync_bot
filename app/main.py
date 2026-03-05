@@ -11,8 +11,7 @@ from app.handlers import MessageHandler
 from app.webhook import webhook_sender
 from app.code_sync_reporter import CodeSyncReporter
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+# 日志已在app.config中配置，这里直接获取logger
 logger = logging.getLogger(__name__)
 
 # 创建FastAPI应用
@@ -87,8 +86,8 @@ async def receive_message(request: Request):
         content_type = request.headers.get("Content-Type", "")
         body_bytes = await request.body()
         
-        print(f"Content-Type: {content_type}")
-        print(f"Body: {body_bytes.decode('utf-8')}")
+        logger.debug(f"Content-Type: {content_type}")
+        logger.debug(f"Body: {body_bytes.decode('utf-8')}")
 
         # 检查是否是验证请求
         if "application/x-www-form-urlencoded" in content_type:
@@ -96,7 +95,7 @@ async def receive_message(request: Request):
             body_str = body_bytes.decode('utf-8')
             import urllib.parse
             form_data = urllib.parse.parse_qs(body_str)
-            print(form_data)
+            logger.debug(f"表单数据: {form_data}")
             
             # 检查是否包含验证参数
             if all(key in form_data for key in ['signature', 'timestamp', 'rn', 'echostr']):
@@ -136,7 +135,7 @@ async def receive_message(request: Request):
         # 处理消息
         result = MessageHandler.process_message_event(message_data)
         
-        if result.get("processed", True):
+        if result.get("success", True):
             return JSONResponse(content={"status": "success", "detail": "消息处理完成"})
         else:
             logger.warning(f"消息未处理: {result.get('reason', '未知原因')}")

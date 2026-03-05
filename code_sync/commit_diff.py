@@ -30,7 +30,7 @@ class Config:
     MASTER_BRANCH = os.environ.get('MASTER_BRANCH', 'origin/master')
     TARGET_BRANCH = os.environ.get('TARGET_BRANCH', 'origin/v2.9.0')
     WHITELIST_FILE = os.environ.get('WHITELIST_FILE', './whitelist.yaml')
-    OUTPUT_FORMAT = os.environ.get('OUTPUT_FORMAT', 'json')  # text / json
+    OUTPUT_FORMAT = os.environ.get('OUTPUT_FORMAT', 'text')  # text / json
     OUTPUT_FILE = os.environ.get('OUTPUT_FILE', '')  # 输出文件路径，为空则输出到终端
 
 
@@ -86,6 +86,18 @@ class WhitelistManager:
 
 
 #===========================================
+# 关注的目录配置
+#===========================================
+# 只有改动涉及这些目录的 commit 才会发送提醒
+MONITORED_DIRS = [
+    'xdnn_pytorch/include',
+    'xdnn_pytorch/src',
+    'python/torch_xmlir/csrc/aten_capture',
+    'python/torch_xmlir/csrc/custom_ops',
+]
+
+
+#===========================================
 # Git 操作
 #===========================================
 def run_git_command(cmd: List[str]) -> str:
@@ -96,6 +108,33 @@ def run_git_command(cmd: List[str]) -> str:
         print(f"[ERROR] {result.stderr}")
         sys.exit(1)
     return result.stdout.strip()
+
+
+def get_commit_changed_files(commit_hash: str) -> List[str]:
+    """
+    获取指定 commit 修改的所有文件路径
+    """
+    cmd = ['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', commit_hash]
+    output = run_git_command(cmd)
+    if not output:
+        return []
+    return output.split('\n')
+
+
+def is_commit_relevant(commit_hash: str) -> bool:
+    """
+    检查 commit 是否涉及关注的目录
+    返回 True 表示该 commit 需要被关注
+    """
+    changed_files = get_commit_changed_files(commit_hash)
+
+    for file_path in changed_files:
+        for monitored_dir in MONITORED_DIRS:
+            # 检查文件是否在关注的目录下（以该目录开头）
+            if file_path.startswith(monitored_dir + '/') or file_path.startswith(monitored_dir):
+                return True
+
+    return False
 
 
 def get_commits(base_commit: str, branch: str) -> List[dict]:
@@ -149,30 +188,37 @@ def find_unsynced_prs(
     master_commits: List[dict],
     target_commits: List[dict],
     whitelist: WhitelistManager
-) -> List[dict]:
+) -> tuple:
     """
     找出 master 中存在但 target 中不存在的 PR
+    返回: (unsynced_list, irrelevant_count)
     """
     # 构建 target 已同步的标题集合
     synced_titles: Set[str] = set()
-    
+
     for commit in target_commits:
         synced_titles.add(normalize_title(commit['title']))
-    
+
     unsynced = []
+    irrelevant_count = 0
     for commit in master_commits:
         # 跳过白名单
         if whitelist.is_whitelisted(commit):
             continue
-        
+
         # 检查标题是否已同步
         normalized = normalize_title(commit['title'])
         if normalized in synced_titles:
             continue
-        
+
+        # 检查是否涉及关注的目录
+        if not is_commit_relevant(commit['hash']):
+            irrelevant_count += 1
+            continue
+
         unsynced.append(commit)
-    
-    return unsynced
+
+    return unsynced, irrelevant_count
 
 
 #===========================================
@@ -192,6 +238,7 @@ def format_text_output(unsynced: List[dict], stats: dict) -> str:
         f"目标分支 Commit 数量: {stats['target_count']}",
         f"未同步 Commit 数量: {stats['unsynced_count']}",
         f"白名单过滤数量: {stats['whitelisted_count']}",
+        f"不涉及关注目录数量: {stats.get('irrelevant_count', 0)}",
         "=" * 60,
     ]
     
@@ -266,17 +313,21 @@ def main():
     print(f"[INFO] 找到 {len(target_commits)} 个 commits")
     
     print("[INFO] 计算未同步的 Commit...")
-    
+
     # 计算白名单过滤数量
     whitelisted_count = sum(1 for c in master_commits if whitelist.is_whitelisted(c))
-    
-    unsynced = find_unsynced_prs(master_commits, target_commits, whitelist)
-    
+
+    unsynced, irrelevant_count = find_unsynced_prs(master_commits, target_commits, whitelist)
+
+    print(f"[INFO] 不涉及关注目录的 Commit 数量: {irrelevant_count}")
+    print(f"[INFO] 关注的目录: {', '.join(MONITORED_DIRS)}")
+
     stats = {
         'master_count': len(master_commits),
         'target_count': len(target_commits),
         'unsynced_count': len(unsynced),
         'whitelisted_count': whitelisted_count,
+        'irrelevant_count': irrelevant_count,
     }
     
     # 输出结果
@@ -298,8 +349,7 @@ def main():
             print(text_content)
     
     # 返回码：有未同步 Commit 时返回 1
-    return 0
-    # return 1 if unsynced else 0
+    return 1 if unsynced else 0
 
 
 if __name__ == '__main__':

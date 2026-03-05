@@ -9,6 +9,7 @@ import subprocess
 import json
 import tempfile
 import sys
+import logging
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -17,6 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.webhook import webhook_sender
 from app.config import WeChatConfig, MessageType
+
+# 获取logger
+logger = logging.getLogger(__name__)
 
 
 class CodeSyncReporter:
@@ -37,7 +41,7 @@ class CodeSyncReporter:
         Returns:
             运行结果字典
         """
-        print(f"[INFO] 开始执行代码同步检查脚本: {self.code_sync_script}")  
+        logger.info(f"开始执行代码同步检查脚本: {self.code_sync_script}")
         try:
             # 设置环境变量，强制输出为JSON格式
             env = os.environ.copy()
@@ -47,8 +51,8 @@ class CodeSyncReporter:
             temp_output = tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False)
             env['OUTPUT_FILE'] = temp_output.name
             
-            print(f"[INFO] 开始执行代码同步检查脚本: {self.code_sync_script}")
-            print(f"[INFO] 输出文件: {temp_output.name}")
+            logger.info(f"开始执行代码同步检查脚本: {self.code_sync_script}")
+            logger.info(f"输出文件: {temp_output.name}")
             
             # 执行脚本
             process = subprocess.Popen(
@@ -61,7 +65,7 @@ class CodeSyncReporter:
                 encoding='utf-8'
             )
             
-            stdout, stderr = process.communicate(timeout=600)  # 10分钟超时
+            stdout, stderr = process.communicate(timeout=180)  # 10分钟超时
             
             # 收集执行日志
             execution_log = f"执行日志:\n"
@@ -79,10 +83,10 @@ class CodeSyncReporter:
                     try:
                         json_data = json.load(f)
                     except json.JSONDecodeError as e:
-                        print(f"[ERROR] JSON解析失败: {e}")
+                        logger.error(f"JSON解析失败: {e}")
                         json_data = None
             else:
-                print(f"[ERROR] 输出文件不存在: {temp_output.name}")
+                logger.error(f"输出出文件不存在: {temp_output.name}")
                 json_data = None
             
             # 清理临时文件
@@ -165,7 +169,6 @@ class CodeSyncReporter:
                     # 检查添加后是否超过1500字符
                     candidate_text = current_message + author_info + commits_text
                     if len(candidate_text) > 1800:
-                        
                         # 首次发送加上检查信息
                         if is_first_send:
                             current_message = check_message + current_message
@@ -182,6 +185,10 @@ class CodeSyncReporter:
                         # 可以添加到当前消息
                         current_message = candidate_text
                 
+                if is_first_send:
+                    current_message = check_message + current_message
+                    is_first_send = False
+
                 # 创建复合消息：文本消息(最后一段) + AT消息
                 final_text_message = {
                     "type": MessageType.TEXT,
@@ -234,14 +241,13 @@ class CodeSyncReporter:
             
             return {
                 "success": final_result["success"],
-                "webhook_result": final_result,
-                "sync_data": json_data,
+                "error_msg": final_result.get("last_failure", {}).get("error_msg", "未知错误"),
                 "execution_log": execution_log
             }
             
         except Exception as e:
-            print(f"[ERROR] 格式化报告失败: {e}")
-            # 回退到发送原始JSON
+            logger.error(f"格式化报告失败: {e}", exc_info=True)
+            # 回退到发送原始JSON报告
             return self._send_text_report(group_id, json.dumps(json_data, indent=2, ensure_ascii=False), execution_log)
     
     
@@ -258,8 +264,7 @@ class CodeSyncReporter:
         
         return {
             "success": result.get("success", False),
-            "webhook_result": result,
-            "sync_data": None,
+            "error_msg": result.get("error_msg", "未知错误"),
             "execution_log": execution_log
         }
     
@@ -274,10 +279,8 @@ class CodeSyncReporter:
         
         return {
             "success": result.get("success", False),
-            "webhook_result": result,
-            "sync_data": None,
+            "error_msg": result.get("error_msg", "未知错误"),
             "execution_log": f"脚本失败: returncode={returncode}, error={error_msg}",
-            "error": True
         }
     
     def _handle_timeout(self, group_id: str) -> Dict[str, Any]:
@@ -285,15 +288,13 @@ class CodeSyncReporter:
         result = webhook_sender.send_text_message(
             group_id=group_id,
             content=f"⏱️ 代码同步检查超时\n"
-                   f"脚本执行时间超过10分钟"
+                   f"脚本执行时间超过3分钟"
         )
         
         return {
             "success": result.get("success", False),
-            "webhook_result": result,
-            "sync_data": None,
+            "error_msg": result.get("error_msg", "未知错误"),
             "execution_log": "执行超时（超过600秒）",
-            "error": True
         }
     
     def _handle_unexpected_error(self, group_id: str, error: Exception) -> Dict[str, Any]:
@@ -307,10 +308,8 @@ class CodeSyncReporter:
         
         return {
             "success": False,
-            "webhook_result": result,
-            "sync_data": None,
+            "error_msg": result.get("error_msg", "未知错误"),
             "execution_log": f"未预期错误: {error}",
-            "error": True
         }
 
 
@@ -338,15 +337,15 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    print(f"[INFO] 开始代码同步检查报告，目标群组: {args.group_id}")
+    logger.info(f"开始代码同步检查报告，目标群组: {args.group_id}")
     result = run_code_sync_and_report(args.group_id)
     
     if args.verbose:
-        print(f"[INFO] 执行结果: {json.dumps(result, indent=2, ensure_ascii=False)}")
+        logger.info(f"执行结果: {json.dumps(result, indent=2, ensure_ascii=False)}")
     
     if result.get("success"):
-        print("[INFO] 报告发送成功")
+        logger.info("报告发送成功")
         sys.exit(0)
     else:
-        print("[ERROR] 报告发送失败")
+        logger.error("报告发送失败")
         sys.exit(1)

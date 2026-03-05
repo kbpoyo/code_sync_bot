@@ -1,4 +1,7 @@
 import os
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -38,8 +41,95 @@ class WeChatConfig:
         if missing:
             raise ValueError(f"缺少必要配置项: {', '.join(missing)}")
         
-        print("配置验证通过")
+        logging.info("配置验证通过")
         return True
+
+# 日志配置
+class LogConfig:
+    """日志配置类"""
+    
+    LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FORMAT = os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    LOG_DATE_FORMAT = os.getenv("LOG_DATE_FORMAT", "%Y-%m-%d %H:%M:%S")
+    LOG_ROTATION = os.getenv("LOG_ROTATION", "10 MB")
+    LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "5"))
+    LOG_ENCODING = os.getenv("LOG_ENCODING", "utf-8")
+    LOG_WHEN_CONSOLE = os.getenv("LOG_WHEN_CONSOLE", "False").lower() == "true"
+    LOG_CONSOLE_LEVEL = os.getenv("LOG_CONSOLE_LEVEL", "INFO")
+    
+    @classmethod
+    def setup_logging(cls):
+        """配置日志系统"""
+        # 创建日志目录（如果不存在）
+        log_dir = Path(cls.LOG_FILE).parent
+        if log_dir != Path("."):
+            log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 创建根logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(cls.LOG_LEVEL.upper())
+        
+        # 清除已有的handler
+        root_logger.handlers.clear()
+        
+        # 文件处理器（带日志轮转）
+        file_handler = RotatingFileHandler(
+            cls.LOG_FILE,
+            maxBytes=cls._parse_size(cls.LOG_ROTATION),
+            backupCount=cls.LOG_BACKUP_COUNT,
+            encoding=cls.LOG_ENCODING
+        )
+        file_handler.setLevel(cls.LOG_LEVEL.upper())
+        file_handler.setFormatter(logging.Formatter(
+            cls.LOG_FORMAT,
+            datefmt=cls.LOG_DATE_FORMAT
+        ))
+        root_logger.addHandler(file_handler)
+        
+        # 控制台处理器（如果启用）
+        if cls.LOG_WHEN_CONSOLE:
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(cls.LOG_CONSOLE_LEVEL.upper())
+            console_handler.setFormatter(logging.Formatter(
+                cls.LOG_FORMAT,
+                datefmt=cls.LOG_DATE_FORMAT
+            ))
+            root_logger.addHandler(console_handler)
+        
+        logging.info("日志系统初始化完成")
+        logging.info(f"日志文件: {cls.LOG_FILE}")
+        logging.info(f"日志级别: {cls.LOG_LEVEL}")
+        logging.info(f"控制台输出: {cls.LOG_WHEN_CONSOLE}")
+    
+    @staticmethod
+    def _parse_size(size_str: str) -> int:
+        """解析大小字符串为字节数"""
+        size_str = size_str.strip().upper()
+        if size_str.isdigit():
+            return int(size_str)
+        
+        # 按照单位长度降序排列，优先匹配更长的单位（GB > MB > KB > B）
+        units = [
+            ('GB', 1024**3),
+            ('MB', 1024**2),
+            ('KB', 1024),
+            ('B', 1)
+        ]
+        
+        for unit, multiplier in units:
+            if size_str.endswith(unit):
+                number = size_str[:-len(unit)].strip()
+                try:
+                    return int(float(number)) * multiplier
+                except ValueError:
+                    raise ValueError(f"无法解析大小值: {number}，请确保是有效的数字")
+        
+        # 默认返回10MB
+        return 10 * 1024 * 1024
+
+# 初始化日志（在模块加载时调用）
+LogConfig.setup_logging()
 
 # 消息类型常量
 class MessageType:

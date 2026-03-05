@@ -1,7 +1,10 @@
 import json
 import requests
+import logging
 from typing import List, Dict, Any, Optional
 from app.config import WeChatConfig, ERROR_MAPPING, MessageType
+
+logger = logging.getLogger(__name__)
 
 class WebhookSender:
     """企业微信群组Webhook消息发送器"""
@@ -110,7 +113,7 @@ class WebhookSender:
         try:
             group_id_int = int(group_id)
         except (ValueError, TypeError):
-            print(f"Invalid group_id: {group_id}")
+            logger.warning(f"Invalid group_id: {group_id}")
             group_id_int = group_id  # 如果转换失败，保持原样
         
         payload = {
@@ -121,8 +124,6 @@ class WebhookSender:
                 "body": message_body
             }
         }
-
-        # print(f"message body: {message_body}")
         
         try:
             response = requests.post(
@@ -140,23 +141,23 @@ class WebhookSender:
                 return {
                     "success": False,
                     "status_code": response.status_code,
-                    "error": f"HTTP错误: {response.status_code}"
+                    "error_msg": f"HTTP错误: {response.status_code}"
                 }
                 
         except requests.exceptions.Timeout:
             return {
                 "success": False,
-                "error": "请求超时"
+                "error_msg": "请求超时"
             }
         except requests.exceptions.RequestException as e:
             return {
                 "success": False,
-                "error": f"网络错误: {str(e)}"
+                "error_msg": f"网络错误: {str(e)}"
             }
         except Exception as e:
             return {
                 "success": False,
-                "error": f"未知错误: {str(e)}"
+                "error_msg": f"未知错误: {str(e)}"
             }
     
     def _handle_webhook_response(self, resp_data: Dict, group_id: str) -> Dict:
@@ -181,53 +182,19 @@ class WebhookSender:
         
         if errcode == -1:
             # 系统错误
-            print(f"系统错误发送到群组 {group_id}: {result['error_msg']}")
+            logger.error(f"系统错误发送到群组 {group_id}: {result['error_msg']}")
         elif resp_data.get("data", {}).get("fail"):
             # 部分用户发送失败
             failed_users = resp_data["data"]["fail"]
             for user_id, user_errcode in failed_users.items():
                 user_error = ERROR_MAPPING.get(user_errcode, f"未知错误码: {user_errcode}")
-                print(f"群组 {group_id} 中用户 {user_id} 发送失败: {user_error}")
+                logger.warning(f"群组 {group_id} 中用户 {user_id} 发送失败: {user_error}")
             result["failed_users"] = failed_users
         elif errcode == 0:
             # 发送成功
-            print(f"消息成功发送到群组 {group_id}")
+            logger.info(f"消息成功发送到群组 {group_id}")
         
         return result
-    
-    def send_acknowledge_message(self, group_id: str, user_id: str, question: str = None) -> Dict:
-        """
-        发送确认接收消息（机器人确认已收到用户提问）
-        
-        Args:
-            group_id: 群组ID
-            user_id: 提问用户ID
-            question: 用户问题（可选）
-            
-        Returns:
-            发送结果
-        """
-        if question:
-            content = f"已收到您的问题：{question}\n正在为您查询..."
-        else:
-            content = "已收到您的消息，正在为您处理..."
-        
-        return self.send_text_message(group_id, content, [user_id])
-    
-    def send_error_message(self, group_id: str, user_id: str, error_info: str) -> Dict:
-        """
-        发送错误提示消息
-        
-        Args:
-            group_id: 群组ID
-            user_id: 用户ID
-            error_info: 错误信息
-            
-        Returns:
-            发送结果
-        """
-        content = f"处理您的请求时遇到问题：{error_info}\n请稍后重试或联系管理员。"
-        return self.send_text_message(group_id, content, [user_id])
 
 
 # 全局Webhook发送器实例
