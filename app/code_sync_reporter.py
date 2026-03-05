@@ -137,7 +137,6 @@ class CodeSyncReporter:
             if unsynced:
                 # 是否首次发送
                 is_first_send = True
-                
                 # 按作者分组
                 authors = {}
                 authors_ids = []
@@ -185,52 +184,53 @@ class CodeSyncReporter:
                         # 可以添加到当前消息
                         current_message = candidate_text
                 
-                # 发送最后一条消息和AT消息
-                if authors_ids and len(authors_ids) > 0:
-                    # 如果有作者ID，创建复合消息：文本消息 + AT消息
-                    final_text_message = {
-                        "type": MessageType.TEXT,
-                        "content": f"{current_message.rstrip()}\n✅ 本次同步检查发现 {len(unsynced)} 个未同步commit，共 {len(authors)} 位作者\n"
-                    }
-                    
-                    final_at_message = {
-                        "type": MessageType.AT,
-                        "atuserids": authors_ids,
-                        "atall": False
-                    }
-                    
-                    # 先添加之前的消息
-                    all_messages.extend(current_messages)
-                    
-                    # 然后添加最后的复合消息
-                    all_messages.append(final_text_message)
-                    all_messages.append(final_at_message)
-                else:
-                    # 没有作者ID，发送纯文本消息
-                    if current_message and current_message != "📝 未同步 Commit (按作者分组):\n":
-                        current_message = current_message +  f"\n✅ 本次同步检查发现 {len(unsynced)} 个未同步commit，共 {len(authors)} 位作者"
-                        current_messages.append({
-                            "type": MessageType.TEXT,
-                            "content": current_message.rstrip()
-                        })
-                    
-                    # 将所有消息添加到总消息列表
-                    all_messages.extend(current_messages)
-            
-            # 分批发送消息，每次最多发送10条
-            final_result = {"success": True}
-            
-            # 发送所有消息
-            for message in all_messages[:len(all_messages) - 2]:
-                send_result = webhook_sender.send_multi_part_message(group_id, [message])
+                # 创建复合消息：文本消息(最后一段) + AT消息
+                final_text_message = {
+                    "type": MessageType.TEXT,
+                    "content": f"{current_message.rstrip()}\n✅ 本次同步检查发现 {len(unsynced)} 个未同步commit，共 {len(authors)} 位作者\n"
+                }
                 
-                # 只要任何一批失败，整体就视为失败
-                if not send_result.get("success", False):
-                    final_result["success"] = False
-                    final_result["last_failure"] = send_result
+                final_at_message = {
+                    "type": MessageType.AT,
+                    "atuserids": authors_ids,
+                    "atall": False
+                }
+                
+                # 先添加之前的消息
+                all_messages.extend(current_messages)
+                
+                # 然后添加最后的复合消息
+                all_messages.append(final_text_message)
+                all_messages.append(final_at_message)
             
-            send_result = webhook_sender.send_multi_part_message(group_id, [all_messages[len(all_messages) - 2], all_messages[len(all_messages) - 1]])
-            if not send_result.get("success", False):
+            else: 
+                # 没有未同步项，发送简单报告
+                all_messages = [
+                    {
+                        "type": MessageType.TEXT,
+                        "content": check_message + "✅ 本次同步检查未发现未同步commit"
+                    },
+                ]
+
+            # 发送消息
+            final_result = {"success": True}
+            if unsynced:
+                # 发送所有消息
+                for message in all_messages[:len(all_messages) - 2]:
+                    send_result = webhook_sender.send_multi_part_message(group_id, [message])
+                    
+                    # 只要任何一批失败，整体就视为失败
+                    if not send_result.get("success", False):
+                        final_result["success"] = False
+                        final_result["last_failure"] = send_result
+            
+                send_result = webhook_sender.send_multi_part_message(group_id, all_messages[len(all_messages) - 2:])
+                if not send_result.get("success", False):
+                        final_result["success"] = False
+                        final_result["last_failure"] = send_result
+            else:
+                send_result = webhook_sender.send_multi_part_message(group_id, all_messages)
+                if not send_result.get("success", False):
                     final_result["success"] = False
                     final_result["last_failure"] = send_result
             
