@@ -116,8 +116,6 @@ class CodeSyncReporter:
             stats = json_data.get('stats', {})
             unsynced = json_data.get('unsynced_commits', [])
             
-            #TODO: 调整逻辑，当没有未同步项时也要发送统计消息
-            
             # 统计信息作为第一条消息
             title = "📊 代码同步检查报告" if not unsynced else "⚠️ 代码同步检查报告（有未同步项）"
 
@@ -255,7 +253,7 @@ class CodeSyncReporter:
         """发送文本报告"""
         # 截断过长内容
         if len(text_content) > 2000:
-            text_content = text_content[:1997] + "..."
+            text_content = text_content[:1800] + "..."
         
         result = webhook_sender.send_text_message(
             group_id=group_id,
