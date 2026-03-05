@@ -116,23 +116,10 @@ class CodeSyncReporter:
             stats = json_data.get('stats', {})
             unsynced = json_data.get('unsynced_commits', [])
             
-            # 构建消息
-            all_messages = []
+            #TODO: 调整逻辑，当没有未同步项时也要发送统计消息
             
             # 统计信息作为第一条消息
             title = "📊 代码同步检查报告" if not unsynced else "⚠️ 代码同步检查报告（有未同步项）"
-            
-            # all_messages.append({
-            #     "type": MessageType.TEXT,
-            #     "content": f"{title}\n"
-            #               f"检查时间: {json_data.get('check_time', '未知时间')}\n"
-            #               f"Master分支: {config.get('master_branch')}\n"
-            #               f"目标分支: {config.get('target_branch')}\n"
-            #               f"Master commit数量: {stats.get('master_count', 0)}\n"
-            #               f"目标分支 commit数量: {stats.get('target_count', 0)}\n"
-            #               f"未同步 commit数量: {stats.get('unsynced_count', 0)}\n"
-            #               f"白名单过滤: {stats.get('whitelisted_count', 0)}"
-            # })
 
             check_message = (f"{title}\n"
                             f"检查时间: {json_data.get('check_time', '未知时间')}\n"
@@ -143,21 +130,28 @@ class CodeSyncReporter:
                             f"未同步 commit数量: {stats.get('unsynced_count', 0)}\n"
                             f"白名单过滤: {stats.get('whitelisted_count', 0)}\n")
             
+            # 构建消息
+            all_messages = []
+
             # 如果有未同步项
             if unsynced:
                 # 是否首次发送
                 is_first_send = True
+                
                 # 按作者分组
                 authors = {}
+                authors_ids = []
                 for commit in unsynced:
                     author = commit.get('author', '未知作者')
                     if author not in authors:
                         authors[author] = []
+                        authors_ids.append(author)
                     authors[author].append(commit)
                 
                 # 创建当前消息组
                 current_messages = []
                 current_message = "📝 未同步 Commit (按作者分组):\n"
+                
                 
                 # 遍历每个作者
                 for author_index, (author, commits) in enumerate(authors.items()):
@@ -191,24 +185,52 @@ class CodeSyncReporter:
                         # 可以添加到当前消息
                         current_message = candidate_text
                 
-                # 添加最后一个消息
-                if current_message and current_message != "📝 未同步 Commit (按作者分组):\n":
-                    current_message = current_message +  f"\n✅ 本次同步检查发现 {len(unsynced)} 个未同步commit，共 {len(authors)} 位作者"
-                    current_messages.append({
+                # 发送最后一条消息和AT消息
+                if authors_ids and len(authors_ids) > 0:
+                    # 如果有作者ID，创建复合消息：文本消息 + AT消息
+                    final_text_message = {
                         "type": MessageType.TEXT,
-                        "content": current_message.rstrip()
-                    })
-                
-                # 将所有消息添加到总消息列表
-                all_messages.extend(current_messages)
+                        "content": f"{current_message.rstrip()}\n✅ 本次同步检查发现 {len(unsynced)} 个未同步commit，共 {len(authors)} 位作者\n"
+                    }
+                    
+                    final_at_message = {
+                        "type": MessageType.AT,
+                        "atuserids": authors_ids,
+                        "atall": False
+                    }
+                    
+                    # 先添加之前的消息
+                    all_messages.extend(current_messages)
+                    
+                    # 然后添加最后的复合消息
+                    all_messages.append(final_text_message)
+                    all_messages.append(final_at_message)
+                else:
+                    # 没有作者ID，发送纯文本消息
+                    if current_message and current_message != "📝 未同步 Commit (按作者分组):\n":
+                        current_message = current_message +  f"\n✅ 本次同步检查发现 {len(unsynced)} 个未同步commit，共 {len(authors)} 位作者"
+                        current_messages.append({
+                            "type": MessageType.TEXT,
+                            "content": current_message.rstrip()
+                        })
+                    
+                    # 将所有消息添加到总消息列表
+                    all_messages.extend(current_messages)
             
             # 分批发送消息，每次最多发送10条
             final_result = {"success": True}
-            for message in all_messages:
+            
+            # 发送所有消息
+            for message in all_messages[:len(all_messages) - 2]:
                 send_result = webhook_sender.send_multi_part_message(group_id, [message])
                 
                 # 只要任何一批失败，整体就视为失败
                 if not send_result.get("success", False):
+                    final_result["success"] = False
+                    final_result["last_failure"] = send_result
+            
+            send_result = webhook_sender.send_multi_part_message(group_id, [all_messages[len(all_messages) - 2], all_messages[len(all_messages) - 1]])
+            if not send_result.get("success", False):
                     final_result["success"] = False
                     final_result["last_failure"] = send_result
             
@@ -227,6 +249,7 @@ class CodeSyncReporter:
             print(f"[ERROR] 格式化报告失败: {e}")
             # 回退到发送原始JSON
             return self._send_text_report(group_id, json.dumps(json_data, indent=2, ensure_ascii=False), execution_log)
+    
     
     def _send_text_report(self, group_id: str, text_content: str, execution_log: str) -> Dict[str, Any]:
         """发送文本报告"""
