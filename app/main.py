@@ -87,21 +87,25 @@ async def receive_message(request: Request):
         content_type = request.headers.get("Content-Type", "")
         body_bytes = await request.body()
         
+        print(f"Content-Type: {content_type}")
+        print(f"Body: {body_bytes.decode('utf-8')}")
+
         # 检查是否是验证请求
-        if content_type == "application/x-www-form-urlencoded":
+        if "application/x-www-form-urlencoded" in content_type:
             # 尝试解析为字符串
             body_str = body_bytes.decode('utf-8')
             import urllib.parse
             form_data = urllib.parse.parse_qs(body_str)
+            print(form_data)
             
             # 检查是否包含验证参数
-            if all(key in form_data for key in ['signature', 'timestamp', 'nonce', 'echostr']):
+            if all(key in form_data for key in ['signature', 'timestamp', 'rn', 'echostr']):
                 signature = form_data['signature'][0]
                 timestamp = form_data['timestamp'][0]
-                nonce = form_data['nonce'][0]
+                rn = form_data['rn'][0]
                 echostr = form_data['echostr'][0]
                 
-                if SecurityManager.verify_signature(signature, timestamp, nonce, WeChatConfig.TOKEN):
+                if SecurityManager.verify_signature(signature, timestamp, rn, WeChatConfig.TOKEN):
                     logger.info("POST方式URL验证成功")
                     return PlainTextResponse(content=echostr)
                 else:

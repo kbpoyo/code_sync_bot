@@ -232,10 +232,6 @@ class CodeSyncReporter:
                     final_result["success"] = False
                     final_result["last_failure"] = send_result
             
-            # 如果没有消息发送，补充默认成功
-            if "success" not in final_result:
-                final_result["success"] = True
-            
             return {
                 "success": final_result["success"],
                 "webhook_result": final_result,

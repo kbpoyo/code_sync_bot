@@ -1,6 +1,11 @@
 from typing import Dict, List, Any, Optional
+import asyncio
+import logging
 from app.config import MessageType
 from app.webhook import webhook_sender
+from app.command_handler import handle_text_command
+
+logger = logging.getLogger(__name__)
 
 class MessageHandler:
     """消息处理器：解析消息并生成基础回复"""
@@ -125,11 +130,47 @@ class MessageHandler:
         
         # 2. 处理文本消息
         if parsed_content["full_text"]:
+            full_text = parsed_content["full_text"]
+            
+            # 检查是否是命令
+            try:
+                # 调用命令处理器检查文本是否为命令
+                command_result = handle_text_command(full_text, group_id, user_id)
+                
+                if command_result.get("is_command", False):
+                    # 这是命令，设置需要进一步处理
+                    response_data["requires_further_processing"] = False
+                    response_data["reason"] = f"命令处理: {command_result.get('command_type', '未知命令')}"
+                    
+                    # 获取命令处理的回复消息
+                    cmd_result_dict = command_result.get("result", {})
+                    cmd_messages = cmd_result_dict.get("messages", [])
+                    
+                    if cmd_messages:
+                        # 如果有命令处理器返回的消息，使用它们
+                        body.extend(cmd_messages)
+                    else:
+                        # 如果没有返回消息，提供默认确认
+                        body.append({
+                            "type": MessageType.TEXT,
+                            "content": f"已收到命令: {full_text}\n正在处理..."
+                        })
+                        
+                    # 命令已处理，不需要下面的默认文本处理
+                    return {
+                        "message_body": body,
+                        "response_data": response_data
+                    }
+            except Exception as e:
+                logger.warning(f"命令处理失败: {e}，回退到默认处理")
+                # 命令处理失败，继续执行下面的默认处理逻辑
+            
+            # 如果不是命令或命令处理失败，使用原有逻辑
             # 基础回复：确认已收到消息
-            reply_content = f"已收到您的问题：{parsed_content['full_text']}"
+            reply_content = f"已收到您的问题：{full_text}"
             
             # 根据内容判断是否需要进一步处理
-            if len(parsed_content["full_text"]) > 10:  # 假设复杂问题需要进一步处理
+            if len(full_text) > 10:  # 假设复杂问题需要进一步处理
                 reply_content += "\n\n（此为自动回复，完整功能需要RAG系统支持）"
                 response_data["requires_further_processing"] = True
                 response_data["reason"] = "复杂问题需要RAG处理"
