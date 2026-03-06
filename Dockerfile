@@ -1,7 +1,7 @@
 # 企业微信群组机器人 Docker 镜像
 # 基于 Python 3.10
 
-FROM ocker.xuanyuan.me/python:3.10-slim-bullseye
+FROM docker.xuanyuan.me/python:3.10-slim-bullseye
 
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
