@@ -23,7 +23,7 @@ echo "   日志文件: logs/scheduler.log"
 
 echo ""
 echo "启动FastAPI服务..."
-echo "   服务地址: http://0.0.0.0:8888"
+echo "   服务地址: http://0.0.0.0:8899"
 echo ""
 
 # 启动FastAPI服务（前台）
