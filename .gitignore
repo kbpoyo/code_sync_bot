@@ -28,6 +28,13 @@
 !/code_sync/*.md
 !/code_sync/*.yaml
 
+# 包含docker部署文件
+!/Dockerfile
+!/docker-compose.yml
+!/.dockerignore
+!/docker_start.sh
+!/run_scheduler.sh
+
 # 临时文件
 *.py[cod]
 *$py.class
