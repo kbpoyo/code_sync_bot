@@ -11,6 +11,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # 设置工作目录
 WORKDIR /app
 
+# 添加百度apt源
+RUN sed -i 's|http://deb.debian.org|http://mirrors.baidubce.com|g' /etc/apt/sources.list &&\
+    pip config set global.index-url http://mirrors.baidubce.com/pypi/simple &&\
+    pip config set global.trusted-host mirrors.baidubce.com
+
 # 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
