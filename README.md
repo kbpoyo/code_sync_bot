@@ -1,6 +1,6 @@
 # 企业微信群组机器人 - FastAPI 版本
 
-基于 FastAPI 构建的企业微信群组机器人服务，提供基础的群组消息接收和发送功能。
+基于 FastAPI 构建的企业微信群组机器人服务，提供群组消息接收、发送和代码同步检查功能。
 
 ## 🚀 功能特性
 
@@ -11,6 +11,8 @@
 - ✅ **多格式支持**：支持文本、Markdown、链接等多种消息格式
 - ✅ **Webhook API**：提供简单易用的消息发送接口
 - ✅ **健康检查**：服务状态监控
+- ✅ **代码同步检查**：自动检查并报告代码同步状态
+- ✅ **定时任务**：内置 APScheduler 调度器，支持每日定时执行
 - 📝 **易于扩展**：模块化设计，便于集成 RAG、OCR 等功能
 
 ## 📁 项目结构
@@ -19,15 +21,26 @@
 .
 ├── app/
 │   ├── __init__.py
-│   ├── main.py           # FastAPI 主应用
-│   ├── config.py         # 配置管理
-│   ├── security.py       # 安全验证（签名、AES解密）
-│   ├── handlers.py       # 消息处理逻辑
-│   └── webhook.py        # Webhook 消息发送功能
-├── run.py               # 服务启动脚本
-├── requirements.txt     # Python依赖
-├── .env.example        # 环境变量示例
-└── README.md          # 项目文档
+│   ├── main.py              # FastAPI 主应用
+│   ├── config.py            # 配置管理（含日志、定时任务配置）
+│   ├── security.py          # 安全验证（签名、AES解密）
+│   ├── handlers.py          # 消息处理逻辑
+│   ├── webhook.py           # Webhook 消息发送功能
+│   ├── command_handler.py   # 命令处理器
+│   ├── code_sync_reporter.py # 代码同步报告生成
+│   └── run_scheduler.py     # 定时任务调度器
+├── code_sync/
+│   ├── code_sync.sh         # 代码同步检查脚本
+│   ├── commit_diff.py       # 提交差异分析
+│   ├── whitelist.yaml       # 白名单配置
+│   └── readme.md            # 代码同步模块文档
+├── tests/                   # 测试用例
+├── run.py                   # 服务启动脚本
+├── run_scheduler.sh         # 定时任务启动脚本
+├── docker_start.sh          # Docker 容器启动脚本
+├── requirements.txt         # Python依赖
+├── .env                     # 环境变量配置
+└── README.md                # 项目文档
 ```
 
 ## 🔧 快速开始
@@ -37,12 +50,7 @@
 ```bash
 # 克隆项目（如果适用）或解压到本地
 # 进入项目目录
-cd fastapi-wechat-robot
-
-# 创建虚拟环境（推荐）
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
+cd code_sync_bot
 
 # 安装依赖
 pip install -r requirements.txt
@@ -52,7 +60,7 @@ pip install -r requirements.txt
 
 1. **复制环境配置**
    ```bash
-   cp .env.example .env
+   cp .env
    ```
 
 2. **编辑 `.env` 文件**，填入企业微信配置：
@@ -154,21 +162,6 @@ EncodingAESKey: 与 .env 中的 ENCODING_AES_KEY 一致
 
 ## 🛠 高级使用
 
-### 自定义消息处理
-
-编辑 `app/handlers.py` 中的 `generate_basic_response` 方法来自定义回复逻辑：
-
-```python
-def generate_basic_response(parsed_content, group_id, user_id):
-    # 在此添加自定义逻辑
-    if "帮助" in parsed_content["full_text"]:
-        body = [{
-            "type": "TEXT",
-            "content": "这是帮助信息..."
-        }]
-    # ...
-```
-
 ### 添加新的消息类型
 
 在 `app/webhook.py` 中添加新的发送方法：
@@ -189,6 +182,61 @@ def send_custom_message(self, group_id, custom_data):
 - **时间戳检查**: 防止重放攻击（60秒有效窗口）
 - **AES加密**: 消息传输全程加密
 - **环境变量**: 敏感信息存储在 `.env` 文件中
+
+## 🕐 定时任务配置
+
+系统内置 APScheduler 调度器，支持每日定时执行代码同步检查，无需依赖系统 cron。
+
+### 环境变量配置
+
+在 `.env` 文件中配置定时任务相关参数：
+
+```ini
+# 定时任务配置
+SCHEDULE_ENABLED = "true"        # 是否启用定时任务（true/false）
+SCHEDULE_SYNC_TIME = "09:00"     # 每日同步检查时间（HH:MM，24小时制）
+# SCHEDULE_SYNC_GROUP_ID = ""    # 目标群组ID，默认使用 GROUP_ID
+
+# 定时任务日志配置（独立配置项，其他配置复用全局日志配置）
+SCHEDULER_LOG_FILE = "logs/scheduler.log"  # 定时任务专用日志文件
+SCHEDULER_LOG_CONSOLE = "true"             # 是否输出到控制台（true/false）
+# 以下为可选独立配置，不设置则复用全局日志配置：
+# SCHEDULER_LOG_LEVEL = "INFO"
+# SCHEDULER_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+# SCHEDULER_LOG_ROTATION = "10 MB"
+# SCHEDULER_LOG_BACKUP_COUNT = "5"
+```
+
+### 启动方式
+
+**方式1：单独启动定时任务调度器**
+```bash
+./run_scheduler.sh
+```
+
+**方式2：Docker 容器启动（同时启动 FastAPI 服务和调度器）**
+```bash
+./docker_start.sh
+```
+
+**方式3：Python 模块方式启动**
+```bash
+python -m app.run_scheduler
+```
+
+### 查看执行日志
+
+```bash
+# 查看定时任务执行日志
+tail -f logs/scheduler.log
+```
+
+### 运行特性
+
+- **持久运行**：调度器在后台持续运行，每天在指定时间自动执行
+- **容错机制**：`misfire_grace_time=3600` 确保错过执行时间后 1 小时内仍会补执行
+- **时区支持**：使用 `Asia/Shanghai` 时区
+- **独立日志**：定时任务日志独立输出到 `logs/scheduler.log`
 
 ## 🐛 故障排除
 
@@ -212,17 +260,6 @@ def send_custom_message(self, group_id, custom_data):
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8080 --log-level debug
 ```
-
-## 📈 后续扩展建议
-
-本项目为基础版本，可扩展的功能包括：
-
-1. **RAG集成** - 在 `handlers.py` 中添加智能问答功能
-2. **OCR处理** - 添加图片识别模块
-3. **数据库连接** - 添加对话历史存储
-4. **用户认证** - 添加多租户支持
-5. **消息队列** - 支持异步处理大量消息
-6. **监控告警** - 添加服务监控和告警机制
 
 ## 📄 开源协议
 

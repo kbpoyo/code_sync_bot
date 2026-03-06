@@ -3,7 +3,6 @@
 whitelist:
   # 按 commit hash 排除（支持短 hash 前缀匹配）
   by_hash:
-    - dc23177a
 
   # 按关键词排除（标题包含这些关键词的 PR 会被跳过）
   by_keyword:

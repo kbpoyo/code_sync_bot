@@ -131,6 +131,109 @@ class LogConfig:
 # 初始化日志（在模块加载时调用）
 LogConfig.setup_logging()
 
+# 定时任务配置
+class ScheduleConfig:
+    """定时任务调度配置"""
+    
+    # 是否启用定时任务
+    ENABLED = os.getenv("SCHEDULE_ENABLED", "true").lower() == "true"
+    
+    # 同步检查时间（格式：HH:MM，24小时制）
+    SYNC_TIME = os.getenv("SCHEDULE_SYNC_TIME", "11:00")
+    
+    # 目标群组ID
+    SYNC_GROUP_ID = os.getenv("SCHEDULE_SYNC_GROUP_ID", os.getenv("GROUP_ID", ""))
+    
+    @classmethod
+    def validate_sync_time(cls) -> bool:
+        """验证同步时间格式是否正确"""
+        try:
+            if not cls.SYNC_TIME:
+                return False
+            parts = cls.SYNC_TIME.split(':')
+            if len(parts) != 2:
+                return False
+            hour, minute = int(parts[0]), int(parts[1])
+            return 0 <= hour <= 23 and 0 <= minute <= 59
+        except (ValueError, AttributeError):
+            return False
+    
+    @classmethod
+    def get_config_info(cls) -> dict:
+        """获取配置信息"""
+        return {
+            "enabled": cls.ENABLED,
+            "sync_time": cls.SYNC_TIME,
+            "sync_group_id": cls.SYNC_GROUP_ID,
+            "time_valid": cls.validate_sync_time()
+        }
+
+
+# 定时任务日志配置（独立于主日志配置，未配置时复用全局配置）
+class SchedulerLogConfig:
+    """定时任务调度器专用日志配置，未单独配置的项复用全局LogConfig"""
+    
+    # 独立配置项：日志文件路径和控制台开关（必须独立）
+    LOG_FILE = os.getenv("SCHEDULER_LOG_FILE", "logs/scheduler.log")
+    LOG_CONSOLE = os.getenv("SCHEDULER_LOG_CONSOLE", "true").lower() == "true"
+    
+    # 可选独立配置，未设置时复用全局LogConfig
+    LOG_LEVEL = os.getenv("SCHEDULER_LOG_LEVEL") or LogConfig.LOG_LEVEL
+    LOG_FORMAT = os.getenv("SCHEDULER_LOG_FORMAT") or LogConfig.LOG_FORMAT
+    LOG_DATE_FORMAT = os.getenv("SCHEDULER_LOG_DATE_FORMAT") or LogConfig.LOG_DATE_FORMAT
+    LOG_ROTATION = os.getenv("SCHEDULER_LOG_ROTATION") or LogConfig.LOG_ROTATION
+    LOG_BACKUP_COUNT = int(os.getenv("SCHEDULER_LOG_BACKUP_COUNT") or LogConfig.LOG_BACKUP_COUNT)
+    LOG_ENCODING = os.getenv("SCHEDULER_LOG_ENCODING") or LogConfig.LOG_ENCODING
+    
+    @classmethod
+    def setup_logging(cls) -> logging.Logger:
+        """配置定时任务专用日志系统，返回独立的logger"""
+        # 创建日志目录
+        log_dir = Path(cls.LOG_FILE).parent
+        if log_dir != Path("."):
+            log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 创建独立的logger（不使用root logger）
+        scheduler_logger = logging.getLogger("scheduler")
+        scheduler_logger.setLevel(cls.LOG_LEVEL.upper())
+        
+        # 清除已有的handler，避免重复
+        scheduler_logger.handlers.clear()
+        
+        # 防止日志向上传播到root logger
+        scheduler_logger.propagate = False
+        
+        # 文件处理器（带日志轮转）
+        file_handler = RotatingFileHandler(
+            cls.LOG_FILE,
+            maxBytes=LogConfig._parse_size(cls.LOG_ROTATION),
+            backupCount=cls.LOG_BACKUP_COUNT,
+            encoding=cls.LOG_ENCODING
+        )
+        file_handler.setLevel(cls.LOG_LEVEL.upper())
+        file_handler.setFormatter(logging.Formatter(
+            cls.LOG_FORMAT,
+            datefmt=cls.LOG_DATE_FORMAT
+        ))
+        scheduler_logger.addHandler(file_handler)
+        
+        # 控制台处理器
+        if cls.LOG_CONSOLE:
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(cls.LOG_LEVEL.upper())
+            console_handler.setFormatter(logging.Formatter(
+                cls.LOG_FORMAT,
+                datefmt=cls.LOG_DATE_FORMAT
+            ))
+            scheduler_logger.addHandler(console_handler)
+        
+        scheduler_logger.info("定时任务日志系统初始化完成")
+        scheduler_logger.info(f"日志文件: {cls.LOG_FILE}")
+        scheduler_logger.info(f"日志级别: {cls.LOG_LEVEL}")
+        scheduler_logger.info(f"控制台输出: {cls.LOG_CONSOLE}")
+        
+        return scheduler_logger
+
 # 消息类型常量
 class MessageType:
     TEXT = "TEXT"
