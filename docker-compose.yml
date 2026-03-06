@@ -12,8 +12,10 @@ services:
     volumes:
       # 持久化日志
       - ./logs:/app/logs
-      # 挂载环境变量配置（可选，也可使用 env_file）
-      # - ./.env:/app/.env:ro
+      # 挂载环境变量配置（支持热更新，修改后 restart 即可生效）
+      - ./.env:/app/.env:ro
+      # 挂载代码同步模块（支持热更新脚本和配置）
+      - ./code_sync:/app/code_sync
     env_file:
       - .env
     environment:
