@@ -83,7 +83,7 @@ class CodeSyncReporter:
                     try:
                         json_data = json.load(f)
                     except json.JSONDecodeError as e:
-                        logger.error(f"JSON解析失败: {e}")
+                        logger.error(f"JSON解析失败: {e}\n同步脚本执行结果: {execution_log}")
                         json_data = None
             else:
                 logger.error(f"输出出文件不存在: {temp_output.name}")

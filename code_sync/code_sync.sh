@@ -37,6 +37,27 @@ if [ -d "${REPO_DIR}/.git" ]; then
     git fetch --all --prune
 else
     echo "[INFO] 克隆仓库..."
+    # 自动获取SSH主机密钥（无需手动确认）
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+
+    # 从URL提取主机和端口: ssh://user@host:port/path
+    GIT_HOST=$(echo "${REPO_URL}" | sed -n 's|.*@\([^:]*\):\([0-9]*\)/.*|\1|p')
+    GIT_PORT=$(echo "${REPO_URL}" | sed -n 's|.*@\([^:]*\):\([0-9]*\)/.*|\2|p')
+
+    if [ -n "${GIT_HOST}" ]; then
+        echo "[INFO] 自动获取主机密钥: ${GIT_HOST}:${GIT_PORT:-22}"
+        # 扫描指定端口的主机密钥
+        if [ -n "${GIT_PORT}" ]; then
+            ssh-keyscan -p "${GIT_PORT}" -t rsa "${GIT_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
+        else
+            ssh-keyscan -t rsa "${GIT_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
+        fi
+        chmod 644 ~/.ssh/known_hosts
+        echo "[INFO] 主机密钥已自动添加到 ~/.ssh/known_hosts"
+    fi
+
+    # 执行克隆
     git clone "${REPO_URL}" "${REPO_DIR}"
     cd "${REPO_DIR}"
 fi

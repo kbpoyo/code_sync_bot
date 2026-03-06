@@ -8,7 +8,7 @@ services:
     container_name: wechat-bot
     restart: unless-stopped
     ports:
-      - "${SERVER_PORT:-8888}:${SERVER_PORT:-8888}"
+      - "${SERVER_PORT:-8899}:${SERVER_PORT:-8899}"
     volumes:
       # 持久化日志
       - ./logs:/app/logs
@@ -16,14 +16,12 @@ services:
       - ./.env:/app/.env:ro
       # 挂载代码同步模块（支持热更新脚本和配置）
       - ./code_sync:/app/code_sync
-      # 挂载SSH密钥
-      - ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8888}/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8899}/health"]
       interval: 30s
       timeout: 10s
       retries: 3

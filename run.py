@@ -33,7 +33,6 @@ def start_service():
             "   健康检查 - GET  http://0.0.0.0:8080/health\n"
             "   发送测试 - POST http://0.0.0.0:8080/api/send_test_message\n"
             "\n🔧 按 Ctrl+C 停止服务\n"
-            "=" * 50
         )
         logger.info(info_msg)
         

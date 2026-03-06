@@ -21,6 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     bash \
     tzdata \
+    curl \
+    ca-certificates \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/* \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone
