@@ -16,6 +16,8 @@ services:
       - ./.env:/app/.env:ro
       # 挂载代码同步模块（支持热更新脚本和配置）
       - ./code_sync:/app/code_sync
+      # 挂载SSH密钥
+      - ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro
     env_file:
       - .env
     environment:
