@@ -8,7 +8,7 @@ services:
     container_name: wechat-bot
     restart: unless-stopped
     ports:
-      - "8888:8888"
+      - "${SERVER_PORT:-8888}:${SERVER_PORT:-8888}"
     volumes:
       # 持久化日志
       - ./logs:/app/logs

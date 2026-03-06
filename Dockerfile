@@ -35,11 +35,11 @@ RUN chmod +x docker_start.sh run_scheduler.sh \
     && chmod +x code_sync/code_sync.sh 2>/dev/null || true
 
 # 暴露服务端口
-EXPOSE 8888
+EXPOSE 8899
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8888/health || exit 1
+    CMD curl -f http://localhost:8899/health || exit 1
 
 # 启动命令
 CMD ["./docker_start.sh"]
