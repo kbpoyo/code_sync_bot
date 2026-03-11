@@ -32,6 +32,7 @@ def start_service():
             "   接收消息 - POST http://0.0.0.0:8080/callback\n"
             "   健康检查 - GET  http://0.0.0.0:8080/health\n"
             "   发送测试 - POST http://0.0.0.0:8080/api/send_test_message\n"
+            f"目标群组:  {WeChatConfig.GROUP_ID}\n"
             "\n🔧 按 Ctrl+C 停止服务\n"
         )
         logger.info(info_msg)

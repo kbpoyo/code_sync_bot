@@ -9,10 +9,10 @@ set -e
 export REPO_URL="${REPO_URL:-ssh://huangwensen@icode.baidu.com:8235/baidu/xpu/XMLIR}"  # 需要更改到QA的链接
 export REPO_DIR="${REPO_DIR:-./XMLIR}"
 # master 和 v2.9.0 使用不同的同步基准点
-export MASTER_SYNC_BASE="${MASTER_SYNC_BASE:-c26bf6059f52c0c4768e22b0ddde34321cdd0b4d}"
-export TARGET_SYNC_BASE="${TARGET_SYNC_BASE:-751a09f017226309e8c670f76665745701ebb469}"
-export MASTER_BRANCH="${MASTER_BRANCH:-origin/master}"
-export TARGET_BRANCH="${TARGET_BRANCH:-origin/v2.9.0}"
+export MASTER_SYNC_BASE="${MASTER_SYNC_BASE:-751a09f017226309e8c670f76665745701ebb469}"
+export TARGET_SYNC_BASE="${TARGET_SYNC_BASE:-c26bf6059f52c0c4768e22b0ddde34321cdd0b4d}"
+export MASTER_BRANCH="${MASTER_BRANCH:-origin/v2.9.0}"
+export TARGET_BRANCH="${TARGET_BRANCH:-origin/master}"
 export WHITELIST_FILE="${WHITELIST_FILE:-./whitelist.yaml}"
 export OUTPUT_FORMAT="${OUTPUT_FORMAT:-text}"
 export OUTPUT_FILE="${OUTPUT_FILE:-}"  # JSON 输出文件路径，为空则输出到终端
