@@ -329,10 +329,11 @@ class CommandHandler:
                 whitelist_data = {"whitelist": {"by_hash": [], "by_keyword": [], "by_author": []}}
             
             # 获取现有的hash白名单
-            existing_hashes = whitelist_data.get("whitelist", {}).get("by_hash", [])
-            
+            existing_hashes = whitelist_data.get("whitelist", {}).get("by_hash") or []
+
             # 添加新的hash值（去重）
             added_hashes = []
+            logger.info(f"new hashes: {new_hashes}")
             for new_hash in new_hashes:
                 if new_hash not in existing_hashes:
                     existing_hashes.append(new_hash)
