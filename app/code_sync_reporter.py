@@ -125,11 +125,14 @@ class CodeSyncReporter:
 
             check_message = (f"{title}\n"
                             f"检查时间: {json_data.get('check_time', '未知时间')}\n"
-                            f"Master分支: {config.get('master_branch')}\n"
+                            f"源分支: {config.get('master_branch')}\n"
+                            f"源分支同步点: {config.get('master_sync_base')}\n"
+                            f"源分支 commit数量: {stats.get('master_count', 0)}\n"
                             f"目标分支: {config.get('target_branch')}\n"
-                            f"Master commit数量: {stats.get('master_count', 0)}\n"
+                            f"目标分支同步点: {config.get('target_sync_base')}\n"
                             f"目标分支 commit数量: {stats.get('target_count', 0)}\n"
                             f"未同步 commit数量: {stats.get('unsynced_count', 0)}\n"
+                            f"未关注目录: {stats.get('irrelevant_count', 0)}\n"
                             f"白名单过滤: {stats.get('whitelisted_count', 0)}\n")
             
             # 构建消息
