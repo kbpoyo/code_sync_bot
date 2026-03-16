@@ -1,13 +1,5 @@
-# whitelist.yaml - 不需要同步到 v2.9.0 的白名单
-
 whitelist:
-  # 按 commit hash 排除（支持短 hash 前缀匹配）
+  by_author: null
   by_hash:
-
-  # 按关键词排除（标题包含这些关键词的 PR 会被跳过）
-  by_keyword:
-    # - "[master-only]"
-
-  # 按作者排除（机器人账号等）
-  by_author:
-    # - "[bot]"
+  - 7b16f51b
+  by_keyword: null
